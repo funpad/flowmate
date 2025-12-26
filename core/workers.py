@@ -99,9 +99,10 @@ class PlannerThread(QThread):
 
 class MonitorThread(QThread):
     update_signal = pyqtSignal(str, str, bool, str)
-    def __init__(self, user_goal): 
+    def __init__(self, main_goal, sub_goal): 
         super().__init__()
-        self.user_goal = user_goal
+        self.main_goal = main_goal
+        self.sub_goal = sub_goal
         self.running = True
         self.ai = AIGuardian()
         self.last_check = (0, "")
@@ -112,7 +113,7 @@ class MonitorThread(QThread):
             self.update_signal.emit("System", "Window monitoring not available", False, "Platform not supported")
             return
             
-        self.ai.create_task_profile(self.user_goal)
+        self.ai.create_task_profile(self.main_goal, self.sub_goal)
         while self.running:
             try:
                 title, proc = get_active_window_info()
@@ -128,7 +129,7 @@ class MonitorThread(QThread):
                 t = time.time()
                 
                 if title != self.last_check[1] or t - self.last_check[0] > 5:
-                    is_d, reason = self.ai.judge(self.user_goal, title, proc)
+                    is_d, reason = self.ai.judge(self.main_goal, self.sub_goal, title, proc)
                     self.update_signal.emit(proc, title, is_d, reason)
                     self.last_check = (t, title)
             except Exception as e:

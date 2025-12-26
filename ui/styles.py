@@ -2,15 +2,18 @@ DIALOG_STYLE = """
     /* 基础弹窗样式 */
     QDialog { 
         background-color: #1E1E2E; 
-        border: 1px solid #444; 
-        border-radius: 12px; 
+        border: none; 
+        border-radius: 15px; 
     }
     
     /* 统一字体栈 - Windows兼容优化 */
-    QLabel, QLineEdit, QSpinBox, QComboBox, QPushButton { 
+    QLabel, QLineEdit, QTextEdit, QSpinBox, QComboBox, QPushButton { 
         font-family: "Microsoft YaHei UI", "Microsoft YaHei", ".AppleSystemUIFont", "SF Pro Display", "Helvetica Neue", sans-serif;
-        color: #DDD; 
+        color: #DDD;
+        outline: none;
     }
+    
+    QLabel { border: none; background: transparent; }
     
     /* 输入框样式修正 - 增加高度和更清晰的边框 */
     QLineEdit { 
@@ -24,6 +27,19 @@ DIALOG_STYLE = """
     }
     QLineEdit:focus {
         border: 1px solid #6C5CE7;
+    }
+    
+    QTextEdit#BigInput {
+        background: #252535;
+        border: 1px solid #444;
+        border-radius: 15px;
+        font-size: 15px;
+        padding: 12px;
+        line-height: 1.5;
+    }
+    QTextEdit#BigInput:focus {
+        border-color: #6C5CE7;
+        background: #28283D;
     }
     
     /* 数字输入框 (SpinBox) - 采用更简洁的一体化设计 */
@@ -89,45 +105,91 @@ DIALOG_STYLE = """
         outline: none;
     }
 
-    /* 按钮样式 - 优化视觉效果 */
+    /* 按钮样式系统 */
     QPushButton { 
         background: #6C5CE7; 
         color: white; 
-        border-radius: 10px; 
-        padding: 10px 18px; 
+        border-radius: 8px; 
+        padding: 8px 16px; 
         font-weight: 600;
         font-size: 13px;
         border: none;
+        outline: none;
     }
-    QPushButton:hover { 
-        background: #5B4CC4; 
+    QPushButton:hover { background: #7D6DF2; }
+    QPushButton:pressed { background: #4A3BA3; }
+    QPushButton:disabled { background: #333344; color: #666; border: 1px solid #444; }
+
+    /* 成功色 (完成/开始) */
+    QPushButton#SuccessBtn { background: #00B894; }
+    QPushButton#SuccessBtn:hover { background: #00D1AA; }
+
+    /* 危险色 (放弃/删除) */
+    QPushButton#DangerBtn { background: #D63031; }
+    QPushButton#DangerBtn:hover { background: #FF4757; }
+
+    /* 警告色 (暂停) */
+    QPushButton#WarningBtn { background: #F1C40F; color: #2D3436; }
+    QPushButton#WarningBtn:hover { background: #F9D84A; }
+
+    /* 次级/取消色 */
+    QPushButton#CancelBtn { background: #636E72; }
+    QPushButton#CancelBtn:hover { background: #7A868B; color: white; }
+
+    /* 顶部图标按钮 */
+    QPushButton#IconBtn { background: transparent; color: #888; font-size: 16px; padding: 0; border: none; }
+    QPushButton#IconBtn:hover { color: #FFF; background: rgba(255,255,255,0.2); }
+    
+    QPushButton#CloseBtn { background: transparent; color: #888; font-size: 18px; font-weight: bold; padding: 0; border: none; }
+    QPushButton#CloseBtn:hover { background: #FF3B30; color: white; }
+    
+    /* 火箭启动按钮专用 */
+    QPushButton#RocketBtn {
+        background: #6C5CE7;
+        color: white;
+        border-radius: 22px;
+        font-size: 20px;
+        padding: 0;
+        border: none;
     }
-    QPushButton:pressed {
+    QPushButton#RocketBtn:hover {
+        background: #7D6DF2;
+    }
+    QPushButton#RocketBtn:pressed {
         background: #4A3BA3;
     }
-    QPushButton#CancelBtn { 
-        background: rgba(51, 51, 51, 0.8); 
-        color: #BBB; 
-        border: 1px solid rgba(85, 85, 85, 0.6); 
+
+    QProgressBar {
+        background: rgba(255, 255, 255, 0.05);
+        border: none;
+        border-radius: 4px;
+        height: 6px;
+        text-align: center;
     }
-    QPushButton#CancelBtn:hover {
-        background: rgba(60, 60, 60, 0.9);
-        color: #DDD;
-    }
-    QPushButton#CloseBtn { 
-        background: transparent; 
-        color: #888; 
-        font-size: 18px; 
-        border: none; 
-    }
-    QPushButton#CloseBtn:hover { 
-        color: white; 
-        background: rgba(255, 255, 255, 0.1);
+    QProgressBar::chunk {
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6C5CE7, stop:1 #A29BFE);
+        border-radius: 4px;
     }
     
     QScrollArea { border: none; background: transparent; }
+    QListWidget { background: transparent; border: none; outline: none; }
+    QTableWidget { background: #2A2A3A; color: #EEE; border: none; border-radius: 6px; gridline-color: #444; }
+    QHeaderView::section { background: #333; color: white; border: none; padding: 4px; }
+    QTextBrowser { background: #2A2A3A; color: #EEE; border: none; border-radius: 6px; padding: 10px; }
+    
+    /* 主界面容器样式 */
+    #ContentLayer {
+        background: rgba(20, 20, 30, 0.9);
+        border-radius: 15px;
+    }
+    #ContentLayer[state="BREAK"] {
+        background: rgba(20, 50, 30, 0.9);
+    }
+    #ContentLayer[state="ALERT"] {
+        background: rgba(60, 20, 20, 0.9);
+    }
 """
 
-MAIN_WINDOW_STYLE = "background: rgba(20, 20, 30, 0.85); border-radius: 15px; border: 1px solid #444;"
-BREAK_STYLE = "background: rgba(20, 50, 30, 0.85); border-radius: 15px; border: 1px solid #4CAF50;"
-ALERT_STYLE = "background: rgba(60, 20, 20, 0.85); border-radius: 15px; border: 2px solid #FF5555;"
+MAIN_WINDOW_STYLE = "background: rgba(20, 20, 30, 0.85); border-radius: 15px; border: none;"
+BREAK_STYLE = "background: rgba(20, 50, 30, 0.85); border-radius: 15px; border: none;"
+ALERT_STYLE = "background: rgba(60, 20, 20, 0.85); border-radius: 15px; border: none;"

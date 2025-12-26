@@ -1,11 +1,12 @@
 import sys
+import random
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, 
                              QHBoxLayout, QFrame, QScrollArea, QTableWidget, 
                              QTableWidgetItem, QHeaderView, QTextBrowser, 
                              QFormLayout, QComboBox, QCheckBox, QSpinBox,
                              QWidget, QListWidget, QListWidgetItem, QAbstractItemView, QGridLayout, QApplication)
-from PyQt6.QtCore import Qt, QSize, QTimer  # <--- 【修复点】这里补上了 QTimer
-from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtCore import Qt, QSize, QTimer, QPropertyAnimation, QParallelAnimationGroup, QSequentialAnimationGroup, QEasingCurve, QPoint  # <--- 加上动画相关组件
+from PyQt6.QtGui import QFont, QColor, QPainter
 from core.config import CONFIG
 from core.workers import ReportThread
 from ui.styles import DIALOG_STYLE
@@ -14,6 +15,7 @@ class BaseDialog(QDialog):
     """支持拖拽的基础弹窗类"""
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.drag_pos = None
 
     def mousePressEvent(self, e):
@@ -35,6 +37,14 @@ class BaseDialog(QDialog):
         if e.buttons() == Qt.MouseButton.LeftButton and self.drag_pos:
             self.move(e.globalPosition().toPoint() - self.drag_pos)
             e.accept()
+
+    def paintEvent(self, event):
+        # 强制绘制圆角背景，防止 macOS/Windows 下出现直角边或全透明问题
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#1E1E2E")) # 使用固定的深色背景
+        painter.drawRoundedRect(self.rect(), 15, 15)
 
     def center_on_parent(self):
         """确保窗口在父窗口中心显示，防止 macOS 负坐标导致窗口不可见"""
@@ -140,8 +150,12 @@ class PlanDialog(BaseDialog):
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(12)
 
-        # 1. 标题 - 跨平台兼容字体处理
-        title_lbl = QLabel("✨ 任务规划", alignment=Qt.AlignmentFlag.AlignCenter)
+        # 1. 标题栏（标题 + 关闭按钮）
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        
+        # 标题 - 跨平台兼容字体处理
+        title_lbl = QLabel("✨ 任务规划")
         if sys.platform == "darwin":
             font_family = "SF Pro Display"
         elif sys.platform == "win32":
@@ -151,10 +165,20 @@ class PlanDialog(BaseDialog):
         title_lbl.setFont(QFont(font_family, 13, QFont.Weight.Bold))
         
         # 标题根据模式变化
-        title_text = "✨ 任务规划" if self.mode == "PLANNING" else "📋 任务管理"
+        title_text = "✨ 任务规划" if self.mode == "PLANNING" else "📋 任务列表"
         title_lbl.setText(title_text)
         
-        main_layout.addWidget(title_lbl)
+        header.addWidget(title_lbl)
+        header.addStretch()
+        
+        # 关闭按钮
+        close_btn = QPushButton("×")
+        close_btn.setObjectName("CloseBtn")
+        close_btn.setFixedSize(30, 30)
+        close_btn.clicked.connect(self.reject)
+        header.addWidget(close_btn)
+        
+        main_layout.addLayout(header)
 
         # 2. 任务列表 (QListWidget)
         self.task_list = QListWidget()
@@ -178,30 +202,30 @@ class PlanDialog(BaseDialog):
         # 3. 初始化加载任务
         for t in self.tasks:
             self.add_task_item(t)
-
-        # 4. 新增按钮 (仅PLANNING模式)
-        if self.mode == "PLANNING":
-            add_btn = QPushButton("＋ 新增步骤")
-            add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            add_btn.setFixedHeight(45)
-            # ... (样式保持不变) ...
-            add_btn.setStyleSheet("""
-                QPushButton { 
-                    background: rgba(255, 255, 255, 0.05); 
-                    border: 1px dashed #444; 
-                    color: #888; 
-                    border-radius: 8px;
-                    margin: 5px 0px;
-                    font-size: 13px;
-                }
-                QPushButton:hover { 
-                    background: rgba(255, 255, 255, 0.08); 
-                    color: #DDD; 
-                    border-color: #6C5CE7; 
-                }
-            """)
-            add_btn.clicked.connect(lambda: self.add_task_item(None))
-            main_layout.addWidget(add_btn)
+            
+        # 4. 新增按钮 (统一开启)
+        add_btn = QPushButton("＋ 新增步骤")
+        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn.setFixedHeight(45)
+        # ... (样式保持不变) ...
+        add_btn.setStyleSheet("""
+            QPushButton { 
+                background: rgba(255, 255, 255, 0.05); 
+                border: 1px dashed #444; 
+                color: #888; 
+                border-radius: 8px;
+                margin: 5px 0px;
+                font-size: 13px;
+                cursor: pointer;
+            }
+            QPushButton:hover { 
+                background: rgba(255, 255, 255, 0.08); 
+                color: #DDD; 
+                border-color: #6C5CE7; 
+            }
+        """)
+        add_btn.clicked.connect(lambda: self.add_task_item(None))
+        main_layout.addWidget(add_btn)
 
         # 5. 底部操作栏
         btn_layout = QHBoxLayout()
@@ -219,11 +243,11 @@ class PlanDialog(BaseDialog):
             confirm_btn.clicked.connect(self.on_confirm)
             btn_layout.addWidget(confirm_btn, 1)
         else:
-            # 管理模式下显示更新按钮，默认隐藏，有变动时显示
+            # 管理模式下显示更新按钮 (初始禁用，有变动时启用)
             self.update_btn = QPushButton("💾 更新任务")
             self.update_btn.setFixedHeight(40)
-            self.update_btn.clicked.connect(self.on_confirm) # 复用逻辑
-            self.update_btn.hide()
+            self.update_btn.clicked.connect(self.on_confirm) 
+            self.update_btn.setEnabled(False)
             btn_layout.addWidget(self.update_btn, 1)
 
         main_layout.addLayout(btn_layout)
@@ -240,8 +264,7 @@ class PlanDialog(BaseDialog):
         item.setSizeHint(QSize(400, 170))
 
         # 2. 创建 widget
-        is_managing = (self.mode == "MANAGING")
-        card_widget = TaskCardWidget(task_data, parent_list=self, item=item, is_managing=is_managing)
+        card_widget = TaskCardWidget(task_data, parent_list=self, item=item, mode=self.mode)
 
         # 3. 关联
         self.task_list.addItem(item)
@@ -266,6 +289,8 @@ class PlanDialog(BaseDialog):
             widget = self.task_list.itemWidget(item)
             if widget:
                 widget.idx_lbl.setText(f"步骤 {i + 1}")
+        # 拖拽排序也是一种变动
+        self.check_dirty()
 
     def check_dirty(self):
         """检查是否有变动 (仅用于管理模式)"""
@@ -286,10 +311,8 @@ class PlanDialog(BaseDialog):
                     is_dirty = True
                     break
         
-        if is_dirty:
-            self.update_btn.show()
-        else:
-            self.update_btn.hide()
+        # 更新按钮状态
+        self.update_btn.setEnabled(is_dirty)
 
     def collect_data(self):
         """收集当前列表数据"""
@@ -300,11 +323,14 @@ class PlanDialog(BaseDialog):
             if widget:
                 step_name = widget.name_edit.text().strip()
                 if not step_name: continue
-                new_tasks.append({
+                task_dict = {
                     "step": step_name,
                     "duration": widget.dur_spin.value(),
                     "break": widget.brk_spin.value()
-                })
+                }
+                if 'id' in widget.data:
+                    task_dict['id'] = widget.data['id']
+                new_tasks.append(task_dict)
         return new_tasks
 
     def on_confirm(self):
@@ -321,11 +347,12 @@ class PlanDialog(BaseDialog):
 
 class TaskCardWidget(QFrame):
     """单个任务卡片组件"""
-    def __init__(self, data, parent_list, item, is_managing=False):
+    def __init__(self, data, parent_list, item, mode="PLANNING"):
         super().__init__()
+        self.data = data # 存储原始数据以获取 ID 等信息
         self.parent_list = parent_list
         self.my_item = item
-        self.is_managing = is_managing
+        self.mode = mode
         self.setObjectName("TaskCard")
 
         self.setStyleSheet("""
@@ -359,30 +386,29 @@ class TaskCardWidget(QFrame):
         
         header.addWidget(self.idx_lbl)
         header.addStretch()
-
-        if not self.is_managing:
-             # 极简风格的叉号删除按钮 (透明背景)
-            del_btn = QPushButton("×")
-            del_btn.setFixedSize(30, 30)
-            del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            del_btn.clicked.connect(self.remove_self)
-            del_btn.setStyleSheet("""
-                QPushButton { 
-                    background: transparent; 
-                    color: #AAA; 
-                    border: none; 
-                    font-family: Arial, sans-serif;
-                    font-size: 24px;
-                    font-weight: normal;
-                    padding: 0;
-                    margin: 0;
-                }
-                QPushButton:hover { 
-                    color: #FF5555; 
-                    font-weight: bold;
-                }
-            """)
-            header.addWidget(del_btn)
+        
+        # 统一开启叉号删除按钮 (透明背景)
+        del_btn = QPushButton("×")
+        del_btn.setFixedSize(30, 30)
+        del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        del_btn.clicked.connect(self.remove_self)
+        del_btn.setStyleSheet("""
+            QPushButton { 
+                background: transparent; 
+                color: #666; 
+                border: none; 
+                font-family: Arial, sans-serif;
+                font-size: 24px;
+                font-weight: normal;
+                padding: 0;
+                margin: 0;
+                cursor: pointer;
+            }
+            QPushButton:hover { 
+                color: #FF5555; 
+            }
+        """)
+        header.addWidget(del_btn)
         
         main_layout.addLayout(header)
 
@@ -419,7 +445,7 @@ class TaskCardWidget(QFrame):
         time_hbox.addWidget(self.brk_spin)
         time_hbox.addStretch()
 
-        if self.is_managing:
+        if self.mode == "MANAGING":
             self.name_edit.textChanged.connect(self.parent_list.check_dirty)
             self.dur_spin.valueChanged.connect(self.parent_list.check_dirty)
             self.brk_spin.valueChanged.connect(self.parent_list.check_dirty)
@@ -431,6 +457,7 @@ class TaskCardWidget(QFrame):
         row = self.parent_list.task_list.row(self.my_item)
         self.parent_list.task_list.takeItem(row)
         self.parent_list.refresh_indices()
+        self.parent_list.check_dirty()
 
 # ================= 日报弹窗 =================
 
@@ -498,54 +525,160 @@ class ReportDialog(BaseDialog):
 class Toast(QWidget):
     def __init__(self):
         super().__init__()
-        # 强力置顶 Flags
+        # 强力置顶 Flags，但不抢夺焦点
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint | 
             Qt.WindowType.WindowStaysOnTopHint | 
             Qt.WindowType.Tool |
-            Qt.WindowType.X11BypassWindowManagerHint 
+            Qt.WindowType.X11BypassWindowManagerHint
+            # 注意：不设置 WindowDoesNotAcceptFocus，因为可能导致窗口不显示
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating) # 不抢夺焦点
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # 不接受焦点
+        
+        self.is_animating = False  # 动画状态标志
+        self.current_anim = None  # 当前运行的动画组
+        self.shake_anim = None  # 抖动动画引用，用于清理
+        
         self.initUI()
     
     def initUI(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         self.lbl = QLabel("")
         self.lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl.setStyleSheet("""
-            background-color: rgba(30, 30, 30, 0.9);
-            color: #FF5555;
+        layout.addWidget(self.lbl)
+        self.set_severity(False) # 默认黄色
+        
+        # 初始化定时器用于自动隐藏
+        self.timer = QTimer()
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self._start_fade_out)
+        
+    def set_severity(self, is_critical):
+        """设置提醒等级：黄色(警告) vs 红色(严重)"""
+        if is_critical:
+            # 红色高危：1分钟内频繁分散
+            bg_color = "rgba(40, 0, 0, 0.95)"
+            accent_color = "#FF5555"
+        else:
+            # 黄色常规：偶发性分散
+            bg_color = "rgba(40, 40, 0, 0.95)"
+            accent_color = "#FFCC00"
+            
+        self.lbl.setStyleSheet(f"""
+            background-color: {bg_color};
+            color: {accent_color};
             font-size: 16px;
             font-weight: bold;
-            border-radius: 8px;
+            border-radius: 15px;
             padding: 12px 24px;
-            border: 1px solid #FF5555;
+            border: 2px solid {accent_color};
         """)
-        # 阴影效果
-        from PyQt6.QtWidgets import QGraphicsDropShadowEffect
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(15)
-        shadow.setColor(QColor(0, 0, 0, 100))
-        shadow.setOffset(0, 4)
-        self.lbl.setGraphicsEffect(shadow)
-        
-        layout.addWidget(self.lbl)
-        
-        # 自动隐藏定时器
-        self.timer = QTimer(self)
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(self.hide)
-    
-    def show_message(self, text):
+
+    def show_message(self, text, is_critical=False):
+        """显示弹幕消息：采用更稳健的动画生命周期管理，解决红色弹幕可能停滞的问题"""
+        # 如果当前正在显示动画，且新的请求不是紧急的，则跳过，避免动画冲突
+        if self.is_animating and not is_critical:
+            return
+            
+        # 如果正在运行动画，先强制停止并清理
+        if self.current_anim:
+            self.current_anim.stop()
+            self.current_anim.deleteLater()
+            self.current_anim = None
+            
+        self.is_animating = True
+        self.set_severity(is_critical)
         self.lbl.setText(f"{text}")
         self.adjustSize()
-        # 居中屏幕但偏上 (1/3处)
+        
+        # 获取位置
         screen = QApplication.primaryScreen().geometry()
-        self.move(
-            screen.width()//2 - self.width()//2,
-            screen.height()//3 - self.height()//2
-        )
+        sw, sh = screen.width(), screen.height()
+        y_pos = sh // 4 + random.randint(-15, 15)
+        tw = self.width() if self.width() > 0 else 200
+        cx = (sw - tw) // 2
+        
+        # 1. 创建总控顺序动画组
+        main_seq = QSequentialAnimationGroup(self)
+        
+        # 2. 飞入阶段 (并行：位置 + 透明度)
+        fly_in = QParallelAnimationGroup(main_seq)
+        
+        pos_in = QPropertyAnimation(self, b"pos", fly_in)
+        pos_in.setDuration(500)
+        pos_in.setStartValue(QPoint(sw, y_pos))
+        pos_in.setEndValue(QPoint(cx, y_pos))
+        pos_in.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        fade_in = QPropertyAnimation(self, b"windowOpacity", fly_in)
+        fade_in.setDuration(500)
+        fade_in.setStartValue(0.0)
+        fade_in.setEndValue(1.0)
+        
+        fly_in.addAnimation(pos_in)
+        fly_in.addAnimation(fade_in)
+        main_seq.addAnimation(fly_in)
+        
+        # 3. 严重警告时的抖动阶段
+        if is_critical:
+            shake = QPropertyAnimation(self, b"pos", main_seq)
+            shake.setDuration(400)
+            shake.setStartValue(QPoint(cx, y_pos))
+            # 关键帧实现剧烈抖动
+            shake.setKeyValueAt(0.2, QPoint(cx - 12, y_pos))
+            shake.setKeyValueAt(0.4, QPoint(cx + 12, y_pos))
+            shake.setKeyValueAt(0.6, QPoint(cx - 12, y_pos))
+            shake.setKeyValueAt(0.8, QPoint(cx + 12, y_pos))
+            shake.setEndValue(QPoint(cx, y_pos))
+            main_seq.addAnimation(shake)
+            
+        # 4. 停留阶段 (使用透明度动画作为稳定的延时，比addPause更可靠)
+        stay = QPropertyAnimation(self, b"windowOpacity", main_seq)
+        stay.setDuration(2500 if is_critical else 2000)
+        stay.setStartValue(1.0)
+        stay.setEndValue(1.0)
+        main_seq.addAnimation(stay)
+        
+        # 5. 飞出阶段 (并行：位置 + 透明度)
+        fly_out = QParallelAnimationGroup(main_seq)
+        
+        pos_out = QPropertyAnimation(self, b"pos", fly_out)
+        pos_out.setDuration(500)
+        pos_out.setStartValue(QPoint(cx, y_pos))
+        pos_out.setEndValue(QPoint(-tw - 50, y_pos)) # 多飞出一段距离
+        pos_out.setEasingCurve(QEasingCurve.Type.InCubic)
+        
+        fade_out = QPropertyAnimation(self, b"windowOpacity", fly_out)
+        fade_out.setDuration(500)
+        fade_out.setStartValue(1.0)
+        fade_out.setEndValue(0.0)
+        
+        fly_out.addAnimation(pos_out)
+        fly_out.addAnimation(fade_out)
+        main_seq.addAnimation(fly_out)
+        
+        # 监听结束
+        main_seq.finished.connect(self._on_animation_finished)
+        
+        # 准备并启动
+        self.move(sw, y_pos)
+        self.setWindowOpacity(0.0)
         self.show()
-        self.raise_() # 强制提升层级
-        self.timer.start(3000) # 3秒后自动隐藏 (若重复调用会重置计时)
+        self.raise_()
+        
+        self.current_anim = main_seq
+        main_seq.start()
+
+    def _start_fade_out(self): pass
+        
+    def _on_animation_finished(self):
+        """动画真正物理结束"""
+        self.is_animating = False
+        self.current_anim = None
+        self.hide()
+        self.setWindowOpacity(1.0)
+        
+    def _cleanup_shake(self): pass
