@@ -433,13 +433,15 @@ class FlowMate(QWidget):
         
         if self.task_paused:
             if self.monitor: self.monitor.stop()
-            self.task_lbl.setText("⏸️ 任务已暂停")
+            txt = "休息" if self.state == "BREAK" else "任务"
+            self.task_lbl.setText(f"⏸️ {txt}已暂停")
             self.btn_ps.setText("▶️ 继续")
-            self.action_task_pause.setText("▶️ 恢复任务")
+            self.action_task_pause.setText(f"▶️ 恢复{txt}")
             self.tray_icon.setIcon(QIcon("assets/tray_paused.png")) 
         else:
             self.btn_ps.setText("⏸️ 暂停")
-            self.action_task_pause.setText("⏸️ 暂停任务")
+            txt = "休息" if self.state == "BREAK" else "任务"
+            self.action_task_pause.setText(f"⏸️ 暂停{txt}")
             self.tray_icon.setIcon(QIcon("assets/tray_active.png"))
             self.refresh_monitor_state()
             if self.state == "BREAK": self.task_lbl.setText("☕ 休息时间")

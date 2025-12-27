@@ -61,20 +61,25 @@ class BaseDialog(QDialog):
 class SettingsDialog(BaseDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.providers = {
+            "DeepSeek": {"base_url": "https://api.deepseek.com", "models": ["deepseek-chat", "deepseek-coder"]},
+            "OpenRouter": {"base_url": "https://openrouter.ai/api/v1", "models": ["google/gemini-pro-1.5", "mistralai/mistral-7b-instruct", "openai/gpt-3.5-turbo"]},
+            "自定义": {"base_url": "", "models": []}
+        }
         self.initUI()
         self.load_settings()
         self.center_on_parent()
 
     def initUI(self):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
-        self.setFixedSize(400, 350)
+        self.setFixedSize(400, 420)
         self.setStyleSheet(DIALOG_STYLE)
 
         layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(25, 25, 25, 25)
 
         header = QHBoxLayout()
-        header.addWidget(QLabel("⚙️ 设置", styleSheet="font-size: 16px; font-weight: bold; border:none;"))
+        header.addWidget(QLabel("⚙️ AI 配置", styleSheet="font-size: 18px; font-weight: bold; color: #6C5CE7;"))
         header.addStretch()
 
         close = QPushButton("×")
@@ -87,31 +92,43 @@ class SettingsDialog(BaseDialog):
 
         form = QFormLayout()
         form.setSpacing(15)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self.provider_input = QComboBox()
+        self.provider_input.addItems(list(self.providers.keys()))
+        self.provider_input.currentTextChanged.connect(self.on_provider_changed)
 
         self.api_input = QLineEdit()
         self.api_input.setPlaceholderText("sk-...")
         self.api_input.setEchoMode(QLineEdit.EchoMode.Password)
 
+        self.base_url_input = QLineEdit()
+        self.base_url_input.setPlaceholderText("https://api...")
+
         self.model_input = QComboBox()
-        self.model_input.addItems(["deepseek-chat", "gpt-3.5-turbo"])
         self.model_input.setEditable(True)
 
-        self.strict_check = QCheckBox("开启魔鬼教官模式")
-        self.strict_check.setStyleSheet("color: #DDD;")
+        self.strict_check = QCheckBox(" 开启教官模式 (强制专注)")
+        self.strict_check.setStyleSheet("color: #AAA; font-size: 12px;")
 
+        form.addRow("服务商:", self.provider_input)
         form.addRow("API Key:", self.api_input)
-        form.addRow("模型:", self.model_input)
+        form.addRow("接口地址:", self.base_url_input)
+        form.addRow("模型名称:", self.model_input)
         form.addRow("", self.strict_check)
 
         layout.addLayout(form)
         layout.addStretch()
 
         h_layout = QHBoxLayout()
+        h_layout.setSpacing(15)
         cancel_btn = QPushButton("取消")
         cancel_btn.setObjectName("CancelBtn")
+        cancel_btn.setMinimumHeight(40)
         cancel_btn.clicked.connect(self.reject)
         
-        save_btn = QPushButton("保存配置")
+        save_btn = QPushButton("确定保存")
+        save_btn.setMinimumHeight(40)
         save_btn.clicked.connect(self.save_settings)
         
         h_layout.addWidget(cancel_btn, 1)
@@ -119,13 +136,39 @@ class SettingsDialog(BaseDialog):
         layout.addLayout(h_layout)
         self.setLayout(layout)
 
+    def on_provider_changed(self, name):
+        p = self.providers.get(name)
+        if p["base_url"]:
+            self.base_url_input.setText(p["base_url"])
+            self.base_url_input.setReadOnly(True)
+            self.base_url_input.setStyleSheet("background: #1A1A26; color: #666;")
+        else:
+            self.base_url_input.setReadOnly(False)
+            self.base_url_input.setStyleSheet("")
+        
+        self.model_input.clear()
+        self.model_input.addItems(p["models"])
+
     def load_settings(self):
+        saved_url = CONFIG.get("base_url", "https://api.deepseek.com")
         self.api_input.setText(CONFIG.get("api_key", ""))
+        self.base_url_input.setText(saved_url)
         self.model_input.setCurrentText(CONFIG.get("model", "deepseek-chat"))
         self.strict_check.setChecked(CONFIG.get("strict_mode", False))
+        
+        # 尝试匹配 Provider
+        found = False
+        for name, p in self.providers.items():
+            if p["base_url"] == saved_url:
+                self.provider_input.setCurrentText(name)
+                found = True
+                break
+        if not found:
+            self.provider_input.setCurrentText("自定义")
 
     def save_settings(self):
         CONFIG.save_config("api_key", self.api_input.text().strip())
+        CONFIG.save_config("base_url", self.base_url_input.text().strip())
         CONFIG.save_config("model", self.model_input.currentText().strip())
         CONFIG.save_config("strict_mode", self.strict_check.isChecked())
         self.accept()
